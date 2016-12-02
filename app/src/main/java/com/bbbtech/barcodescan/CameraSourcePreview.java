@@ -64,7 +64,7 @@ public class CameraSourcePreview extends ViewGroup {
     }
 
     @RequiresPermission(Manifest.permission.CAMERA)
-    public void start(CameraSource cameraSource, int facing) throws IOException, SecurityException {
+    public void start(CameraSource cameraSource, boolean isFacingFront) throws IOException, SecurityException {
         if (cameraSource == null) {
             stop();
         }
@@ -72,7 +72,8 @@ public class CameraSourcePreview extends ViewGroup {
         mCameraSource = cameraSource;
 
         if (mCameraSource != null) {
-            mCameraSource.setFacing(facing);
+            int cameraFacing = isFacingFront ? CameraSource.CAMERA_FACING_FRONT : CameraSource.CAMERA_FACING_BACK;
+            mCameraSource.setFacing(cameraFacing);
             mStartRequested = true;
             startIfReady();
         }
@@ -104,6 +105,7 @@ public class CameraSourcePreview extends ViewGroup {
         public void surfaceCreated(SurfaceHolder surface) {
             mSurfaceAvailable = true;
             try {
+                //noinspection MissingPermission
                 startIfReady();
             } catch (SecurityException se) {
                 Log.e(TAG,"Do not have permission to start the camera", se);
@@ -160,6 +162,7 @@ public class CameraSourcePreview extends ViewGroup {
         }
 
         try {
+            //noinspection MissingPermission
             startIfReady();
         } catch (SecurityException se) {
             Log.e(TAG,"Do not have permission to start the camera", se);
