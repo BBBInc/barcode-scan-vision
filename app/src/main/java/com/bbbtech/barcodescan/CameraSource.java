@@ -345,7 +345,7 @@ public class CameraSource {
      * @throws IOException if the camera's preview texture or display could not be initialized
      */
     @RequiresPermission(Manifest.permission.CAMERA)
-    public CameraSource start() throws IOException {
+    public CameraSource start() throws IOException, CameraNullPointerException {
         synchronized (mCameraLock) {
             if (mCamera != null) {
                 return this;
@@ -379,7 +379,7 @@ public class CameraSource {
      * @throws IOException if the supplied surface holder could not be used as the preview display
      */
     @RequiresPermission(Manifest.permission.CAMERA)
-    public CameraSource start(SurfaceHolder surfaceHolder) throws IOException {
+    public CameraSource start(SurfaceHolder surfaceHolder) throws IOException, CameraNullPointerException {
         synchronized (mCameraLock) {
             if (mCamera != null) {
                 return this;
@@ -775,12 +775,17 @@ public class CameraSource {
      * @throws RuntimeException if the method fails
      */
     @SuppressLint("InlinedApi")
-    private Camera createCamera() {
+    private Camera createCamera() throws CameraNullPointerException {
         int requestedCameraId = getIdForRequestedCamera(mFacing);
         if (requestedCameraId == -1) {
             throw new RuntimeException("Could not find requested camera.");
         }
         Camera camera = Camera.open(requestedCameraId);
+
+        // 특정 기기에서 권한 등의 문제로 (6.0 미만 디바이스) 초기화하지 못해 camera = null 인 경우가 발생, 예외처리 필요
+        if (camera == null) {
+            throw new CameraNullPointerException();
+        }
 
         SizePair sizePair = selectSizePair(camera, mRequestedPreviewWidth, mRequestedPreviewHeight);
         if (sizePair == null) {

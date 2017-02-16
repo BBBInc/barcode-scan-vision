@@ -36,13 +36,20 @@ public class CameraSourcePreview extends ViewGroup {
     private SurfaceView mSurfaceView;
     private boolean mStartRequested;
     private boolean mSurfaceAvailable;
+    private boolean mCameraAvailable;
     private CameraSource mCameraSource;
+    private CameraSourcePreviewListener listener;
+
+    public interface CameraSourcePreviewListener {
+        void onCameraNullPointerException();
+    }
 
     public CameraSourcePreview(Context context, AttributeSet attrs) {
         super(context, attrs);
         mContext = context;
         mStartRequested = false;
         mSurfaceAvailable = false;
+        mCameraAvailable = true;
 
         mSurfaceView = new SurfaceView(context);
         mSurfaceView.getHolder().addCallback(new SurfaceCallback());
@@ -50,7 +57,7 @@ public class CameraSourcePreview extends ViewGroup {
     }
 
     @RequiresPermission(Manifest.permission.CAMERA)
-    public void start(CameraSource cameraSource) throws IOException, SecurityException {
+    public void start(CameraSource cameraSource) throws IOException, SecurityException, CameraNullPointerException {
         if (cameraSource == null) {
             stop();
         }
@@ -64,7 +71,7 @@ public class CameraSourcePreview extends ViewGroup {
     }
 
     @RequiresPermission(Manifest.permission.CAMERA)
-    public void start(CameraSource cameraSource, boolean isFacingFront) throws IOException, SecurityException {
+    public void start(CameraSource cameraSource, boolean isFacingFront) throws IOException, SecurityException, CameraNullPointerException {
         if (cameraSource == null) {
             stop();
         }
@@ -92,9 +99,13 @@ public class CameraSourcePreview extends ViewGroup {
         }
     }
 
+    public void setListener(CameraSourcePreviewListener listener) {
+        this.listener = listener;
+    }
+
     @RequiresPermission(Manifest.permission.CAMERA)
-    private void startIfReady() throws IOException, SecurityException {
-        if (mStartRequested && mSurfaceAvailable) {
+    private void startIfReady() throws IOException, SecurityException, CameraNullPointerException {
+        if (mStartRequested && mSurfaceAvailable && mCameraAvailable) {
             mCameraSource.start(mSurfaceView.getHolder());
             mStartRequested = false;
         }
@@ -111,6 +122,12 @@ public class CameraSourcePreview extends ViewGroup {
                 Log.e(TAG,"Do not have permission to start the camera", se);
             } catch (IOException e) {
                 Log.e(TAG, "Could not start camera source.", e);
+            } catch (CameraNullPointerException e) {
+                Log.e(TAG, "Could not start camera source because of specific permission issues", e);
+                if (listener != null) {
+                    listener.onCameraNullPointerException();
+                }
+                mCameraAvailable = false;
             }
         }
 
@@ -168,6 +185,9 @@ public class CameraSourcePreview extends ViewGroup {
             Log.e(TAG,"Do not have permission to start the camera", se);
         } catch (IOException e) {
             Log.e(TAG, "Could not start camera source.", e);
+        } catch (CameraNullPointerException e) {
+            mCameraAvailable = false;
+            Log.e(TAG, "Could not start camera source because of specific permission issues", e);
         }
     }
 
