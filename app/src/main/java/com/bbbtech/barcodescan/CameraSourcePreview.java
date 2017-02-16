@@ -50,7 +50,7 @@ public class CameraSourcePreview extends ViewGroup {
     }
 
     @RequiresPermission(Manifest.permission.CAMERA)
-    public void start(CameraSource cameraSource) throws IOException, SecurityException {
+    public void start(CameraSource cameraSource) throws IOException, SecurityException, CameraNullPointerException {
         if (cameraSource == null) {
             stop();
         }
@@ -64,7 +64,7 @@ public class CameraSourcePreview extends ViewGroup {
     }
 
     @RequiresPermission(Manifest.permission.CAMERA)
-    public void start(CameraSource cameraSource, boolean isFacingFront) throws IOException, SecurityException {
+    public void start(CameraSource cameraSource, boolean isFacingFront) throws IOException, SecurityException, CameraNullPointerException {
         if (cameraSource == null) {
             stop();
         }
@@ -93,7 +93,7 @@ public class CameraSourcePreview extends ViewGroup {
     }
 
     @RequiresPermission(Manifest.permission.CAMERA)
-    private void startIfReady() throws IOException, SecurityException {
+    private void startIfReady() throws IOException, SecurityException, CameraNullPointerException {
         if (mStartRequested && mSurfaceAvailable) {
             mCameraSource.start(mSurfaceView.getHolder());
             mStartRequested = false;
@@ -111,6 +111,8 @@ public class CameraSourcePreview extends ViewGroup {
                 Log.e(TAG,"Do not have permission to start the camera", se);
             } catch (IOException e) {
                 Log.e(TAG, "Could not start camera source.", e);
+            } catch (CameraNullPointerException e) {
+                Log.e(TAG, "Could not start camera source because of specific permission issues", e);
             }
         }
 
@@ -168,6 +170,8 @@ public class CameraSourcePreview extends ViewGroup {
             Log.e(TAG,"Do not have permission to start the camera", se);
         } catch (IOException e) {
             Log.e(TAG, "Could not start camera source.", e);
+        } catch (CameraNullPointerException e) {
+            Log.e(TAG, "Could not start camera source because of specific permission issues", e);
         }
     }
 
