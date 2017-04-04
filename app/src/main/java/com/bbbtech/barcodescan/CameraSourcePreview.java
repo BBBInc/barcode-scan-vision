@@ -186,8 +186,8 @@ public class CameraSourcePreview extends ViewGroup {
         } catch (IOException e) {
             Log.e(TAG, "Could not start camera source.", e);
         } catch (CameraNullPointerException e) {
-            mCameraAvailable = false;
             Log.e(TAG, "Could not start camera source because of specific permission issues", e);
+            mCameraAvailable = false;
         }
     }
 
