@@ -16,8 +16,30 @@ import com.google.android.gms.vision.barcode.Barcode;
  *
  * BarcodeCropFocusingProcessor
  *  중앙 특정 영역 부근만 측정되도록 하는 로직
+ *
+ *  setCameraSourceSize()와 setPreviewRect()를 반드시 호출해 주어야 함
+ *
+ *  BarcodeTracker tracker = new BarcodeTracker(this, this, false);
+ *  final BarcodeCropFocusingProcessor focusingProcessor = new BarcodeCropFocusingProcessor(barcodeDetector, tracker);
+ *  mPreview.setCallback(new CameraSourcePreviewCallback() {
+ *      public void onCameraPreviewSizeDetermined(Size previewSize) {
+ *          focusingProcessor.setCameraSourceSize(previewSize);
+ *      }
+ *  });
+ *  barcodeDetector.setProcessor(focusingProcessor);
+ *
+ *  mPreview.getViewTreeObserver().addOnPreDrawListener(new ViewTreeObserver.OnPreDrawListener() {
+ *      public boolean onPreDraw() {
+ *          mPreview.getViewTreeObserver().removeOnPreDrawListener(this);
+ *
+ *          Rect visibleRect = new Rect();
+ *          mPreview.getLocalVisibleRect(visibleRect);
+ *
+ *          focusingProcessor.setPreviewRect(visibleRect, mPreview.getPaddingLeft(), mPreview.getPaddingTop());
+ *          return true;
+ *      }
+ *  });
  */
-
 public class BarcodeCropFocusingProcessor extends FocusingProcessor<Barcode> {
     private Size cameraSourceSize;  // 카메라 소스 크기
     private Rect previewRect;       // 카메라 프리뷰 영역 전체
@@ -62,25 +84,6 @@ public class BarcodeCropFocusingProcessor extends FocusingProcessor<Barcode> {
                 paddingHorizontal, paddingVertical,
                 paddingHorizontal + cropFrameWidth, paddingVertical + cropFrameHeight);
     }
-
-//    public void setPreviewRect(Rect previewRect, int paddingHorizontal, int paddingVertical) {
-//        int cropFrameWidth = previewRect.right - (paddingHorizontal * 2);
-//        int cropFrameHeight = previewRect.bottom - (paddingVertical * 2);
-//
-//        Rect originalCropFrameRect = new Rect(
-//                paddingHorizontal, paddingVertical,
-//                paddingHorizontal + cropFrameWidth, paddingVertical + cropFrameHeight);
-//
-//        // elemark 2 전용
-//        // 뷰와 소스의 비율 차이만큼 좌표 변환
-//        Rect previewSourceRect = new Rect(0, 0, 1080, 1440);
-//        float widthRatio = (float) previewSourceRect.width() / previewRect.width();
-//        float heightRatio = (float) previewSourceRect.height() / previewRect.height();
-//
-//        this.cropFrameRect = new Rect(
-//                (int) (originalCropFrameRect.left * widthRatio), (int) (originalCropFrameRect.top * heightRatio),
-//                (int) (originalCropFrameRect.right * widthRatio), (int) (originalCropFrameRect.bottom * heightRatio));
-//    }
 
     @Override
     public int selectFocus(Detector.Detections<Barcode> detections) {
