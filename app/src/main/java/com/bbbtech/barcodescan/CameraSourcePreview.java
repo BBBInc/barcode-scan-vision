@@ -39,6 +39,7 @@ public class CameraSourcePreview extends ViewGroup {
     private boolean mCameraAvailable;
     private CameraSource mCameraSource;
     private CameraSourcePreviewListener listener;
+    private CameraSourcePreviewCallback mCallback;
 
     public interface CameraSourcePreviewListener {
         void onCameraNullPointerException();
@@ -103,10 +104,17 @@ public class CameraSourcePreview extends ViewGroup {
         this.listener = listener;
     }
 
+    public void setCallback(CameraSourcePreviewCallback callback) {
+        mCallback = callback;
+    }
+
     @RequiresPermission(Manifest.permission.CAMERA)
     private void startIfReady() throws IOException, SecurityException, CameraNullPointerException {
         if (mStartRequested && mSurfaceAvailable && mCameraAvailable) {
             mCameraSource.start(mSurfaceView.getHolder());
+            if (mCameraSource != null && mCameraSource.getPreviewSize() != null && mCallback != null) {
+                mCallback.onCameraPreviewSizeDetermined(mCameraSource.getPreviewSize());
+            }
             mStartRequested = false;
         }
     }
