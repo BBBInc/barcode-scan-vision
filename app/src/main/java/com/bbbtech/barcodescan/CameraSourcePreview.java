@@ -24,6 +24,7 @@ import android.util.Log;
 import android.view.SurfaceHolder;
 import android.view.SurfaceView;
 import android.view.ViewGroup;
+import android.widget.Toast;
 
 import com.google.android.gms.common.images.Size;
 
@@ -111,11 +112,16 @@ public class CameraSourcePreview extends ViewGroup {
     @RequiresPermission(Manifest.permission.CAMERA)
     private void startIfReady() throws IOException, SecurityException, CameraNullPointerException {
         if (mStartRequested && mSurfaceAvailable && mCameraAvailable) {
-            mCameraSource.start(mSurfaceView.getHolder());
-            if (mCameraSource != null && mCameraSource.getPreviewSize() != null && mCallback != null) {
-                mCallback.onCameraPreviewSizeDetermined(mCameraSource.getPreviewSize());
+            if (mCameraSource != null) {
+                mCameraSource.start(mSurfaceView.getHolder());
+                if (mCameraSource != null && mCameraSource.getPreviewSize() != null && mCallback != null) {
+                    mCallback.onCameraPreviewSizeDetermined(mCameraSource.getPreviewSize());
+                }
+                mStartRequested = false;
+            } else {
+                // 카메라 하드웨어에 이상이 생긴 경우
+                showCameraModuleError();
             }
-            mStartRequested = false;
         }
     }
 
@@ -127,7 +133,7 @@ public class CameraSourcePreview extends ViewGroup {
                 //noinspection MissingPermission
                 startIfReady();
             } catch (SecurityException se) {
-                Log.e(TAG,"Do not have permission to start the camera", se);
+                Log.e(TAG, "Do not have permission to start the camera", se);
             } catch (IOException e) {
                 Log.e(TAG, "Could not start camera source.", e);
             } catch (CameraNullPointerException e) {
@@ -136,6 +142,10 @@ public class CameraSourcePreview extends ViewGroup {
                     listener.onCameraNullPointerException();
                 }
                 mCameraAvailable = false;
+            } catch (RuntimeException e) {
+                // 카메라 하드웨어에 문제가 있을 때 여기로 빠짐
+                showCameraModuleError();
+                release();
             }
         }
 
@@ -210,5 +220,11 @@ public class CameraSourcePreview extends ViewGroup {
 
         Log.d(TAG, "isPortraitMode returning false by default");
         return false;
+    }
+
+    public void showCameraModuleError() {
+        if (mContext != null) {
+            Toast.makeText(mContext, "There is a problem in camera module.", Toast.LENGTH_SHORT).show();
+        }
     }
 }
