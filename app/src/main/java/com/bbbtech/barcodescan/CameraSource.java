@@ -19,9 +19,13 @@ import android.Manifest;
 import android.annotation.SuppressLint;
 import android.annotation.TargetApi;
 import android.content.Context;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
 import android.graphics.ImageFormat;
+import android.graphics.Matrix;
 import android.graphics.Rect;
 import android.graphics.SurfaceTexture;
+import android.graphics.YuvImage;
 import android.hardware.Camera;
 import android.hardware.Camera.CameraInfo;
 import android.os.Build;
@@ -39,6 +43,7 @@ import com.google.android.gms.common.images.Size;
 import com.google.android.gms.vision.Detector;
 import com.google.android.gms.vision.Frame;
 
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.lang.Thread.State;
 import java.lang.annotation.Retention;
@@ -1230,13 +1235,35 @@ public class CameraSource {
                         return;
                     }
 
-                    outputFrame = new Frame.Builder()
-                            .setImageData(mPendingFrameData, mPreviewSize.getWidth(),
-                                    mPreviewSize.getHeight(), ImageFormat.NV21)
-                            .setId(mPendingFrameId)
-                            .setTimestampMillis(mPendingTimeMillis)
-                            .setRotation(mRotation)
-                            .build();
+                    if (getCameraFacing() == CAMERA_FACING_FRONT) {
+                        YuvImage yuvImage = new YuvImage(mPendingFrameData.array(), ImageFormat.NV21, mPreviewSize.getWidth(),
+                                mPreviewSize.getHeight(), null);
+                        ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
+                        yuvImage.compressToJpeg(new Rect(0, 0, mPreviewSize.getWidth(), mPreviewSize.getHeight()), 100, outputStream); // Where 100 is the quality of the generated jpeg
+                        byte[] rawImage = outputStream.toByteArray();
+                        Bitmap bitmap = BitmapFactory.decodeByteArray(rawImage, 0, rawImage.length);
+
+                        // 비트맵 좌우 반전 : Vision Library 10 버전 부터 좌우 반전된 QR코드 인식 지원. elemark 2 탑 카메라는 FRONT_CAMERA로 인식되어
+                        // 라이브러리에서 좌우 반전을 해서 처리하고 있는 것으로 판단되어 라이브러리에 좌우 반전을 시켜 넘겨 주어 문제를 해결
+                        Matrix matrix = new Matrix();
+                        matrix.postScale(1, -1, mPreviewSize.getWidth() / 2, mPreviewSize.getHeight() / 2);
+                        Bitmap flippedBitmap = Bitmap.createBitmap(bitmap, 0, 0, mPreviewSize.getWidth(), mPreviewSize.getHeight(), matrix, true);
+
+                        outputFrame = new Frame.Builder()
+                                .setBitmap(flippedBitmap)
+                                .setId(mPendingFrameId)
+                                .setTimestampMillis(mPendingTimeMillis)
+                                .setRotation(mRotation)
+                                .build();
+                    } else {
+                        outputFrame = new Frame.Builder()
+                                .setImageData(mPendingFrameData, mPreviewSize.getWidth(),
+                                        mPreviewSize.getHeight(), ImageFormat.NV21)
+                                .setId(mPendingFrameId)
+                                .setTimestampMillis(mPendingTimeMillis)
+                                .setRotation(mRotation)
+                                .build();
+                    }
 
                     // Hold onto the frame data locally, so that we can use this for detection
                     // below.  We need to clear mPendingFrameData to ensure that this buffer isn't
