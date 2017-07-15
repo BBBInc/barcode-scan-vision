@@ -1248,6 +1248,7 @@ public class CameraSource {
                         Matrix matrix = new Matrix();
                         matrix.postScale(1, -1, mPreviewSize.getWidth() / 2, mPreviewSize.getHeight() / 2);
                         Bitmap flippedBitmap = Bitmap.createBitmap(bitmap, 0, 0, mPreviewSize.getWidth(), mPreviewSize.getHeight(), matrix, true);
+                        bitmap.recycle();
 
                         outputFrame = new Frame.Builder()
                                 .setBitmap(flippedBitmap)
