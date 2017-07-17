@@ -451,14 +451,15 @@ public class CameraSource {
                 } catch (Exception e) {
                     Log.e(TAG, "Failed to clear camera preview: " + e);
                 }
-                mCamera.release();
-                mCamera = null;
 
                 // Customize
                 if (mMacroModeEnabled && mAutoFocusManager != null) {
                     mAutoFocusManager.stop();
                     mAutoFocusManager = null;
                 }
+
+                mCamera.release();
+                mCamera = null;
             }
         }
     }
