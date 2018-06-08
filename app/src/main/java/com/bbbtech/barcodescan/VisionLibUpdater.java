@@ -14,6 +14,7 @@ import java.io.OutputStream;
 
 /**
  * Created by Seungyong Yun on 2017. 8. 29.
+ * Modified by Levin Yu
  * @Desc 비전 라이브러리 업데이터
  *       엘리마크2에 구글계정을 설정하지 않고 사용할 경우 비전라이브러리를 사용하는데 필요한 파일이 없을 수 있음.
  *       필요한 파일이 없으면 비전라이브러리에서 바코드를 정상적으로 인식할 수 없음.
