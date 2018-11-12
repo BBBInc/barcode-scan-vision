@@ -33,6 +33,7 @@ import android.os.SystemClock;
 import android.support.annotation.Nullable;
 import android.support.annotation.RequiresPermission;
 import android.support.annotation.StringDef;
+import android.text.TextUtils;
 import android.util.Log;
 import android.view.Surface;
 import android.view.SurfaceHolder;
@@ -120,6 +121,12 @@ public class CameraSource {
     @Retention(RetentionPolicy.SOURCE)
     private @interface FlashMode {}
 
+    @StringDef({
+            "auto","100","200","400","800","1600"
+    })
+    @Retention(RetentionPolicy.SOURCE)
+    private @interface ISO {}
+
     private Context mContext;
 
     private final Object mCameraLock = new Object();
@@ -143,7 +150,7 @@ public class CameraSource {
     private int mRequestedPreviewWidth = 1024;
     private int mRequestedPreviewHeight = 768;
 
-
+    private String mISO = null;
     private String mFocusMode = null;
     private String mFlashMode = null;
 
@@ -159,6 +166,8 @@ public class CameraSource {
      */
     private Thread mProcessingThread;
     private FrameProcessingRunnable mFrameProcessor;
+
+    private CameraFrameListener mFrameListener;
 
     /**
      * Map to convert between a byte array, received from the camera, and its associated byte
@@ -223,6 +232,11 @@ public class CameraSource {
 
         public Builder setFlashMode(@FlashMode String mode) {
             mCameraSource.mFlashMode = mode;
+            return this;
+        }
+
+        public Builder setISO(@ISO String iso) {
+            mCameraSource.mISO = iso;
             return this;
         }
 
@@ -436,6 +450,7 @@ public class CameraSource {
             if (mCamera != null) {
                 mCamera.stopPreview();
                 mCamera.setPreviewCallbackWithBuffer(null);
+
                 try {
                     // We want to be compatible back to Gingerbread, but SurfaceTexture
                     // wasn't introduced until Honeycomb.  Since the interface cannot use a SurfaceTexture, if the
@@ -842,6 +857,9 @@ public class CameraSource {
             }
         }
 
+        if (!TextUtils.isEmpty(mISO))
+            parameters.set("iso-speed", mISO);
+
         // setting mFlashMode to the one set in the params
         mFlashMode = parameters.getFlashMode();
 
@@ -1112,6 +1130,9 @@ public class CameraSource {
     private class CameraPreviewCallback implements Camera.PreviewCallback {
         @Override
         public void onPreviewFrame(byte[] data, Camera camera) {
+            if (null != mFrameListener)
+                mFrameListener.onFrame(data, camera);
+
             mFrameProcessor.setNextFrame(data, camera);
         }
     }
@@ -1287,5 +1308,13 @@ public class CameraSource {
                 }
             }
         }
+    }
+
+    public CameraFrameListener getmFrameListener() {
+        return mFrameListener;
+    }
+
+    public void setmFrameListener(CameraFrameListener mFrameListener) {
+        this.mFrameListener = mFrameListener;
     }
 }

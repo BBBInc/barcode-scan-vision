@@ -91,7 +91,7 @@ public class VisionLibUpdater {
      */
     public static void fetchVisionLibrary11_3ifNeeded(Context context) throws IOException {
         if (readGoolglePlayServiceVersionCode(context.getPackageManager()) == VER_GOOGLEPLAYSERVICES_87) {
-            if (readVisionLibVersion() == INVALID_VERSION) {
+            if (readVisionLibVersion() < BARCODELIB_VER_113) {
                 fetchVisionLibrary11_3();
             }
         }
