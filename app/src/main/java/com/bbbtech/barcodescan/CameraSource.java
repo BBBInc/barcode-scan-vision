@@ -34,12 +34,12 @@ import android.support.annotation.Nullable;
 import android.support.annotation.RequiresPermission;
 import android.support.annotation.StringDef;
 import android.text.TextUtils;
-import android.util.Log;
 import android.view.Surface;
 import android.view.SurfaceHolder;
 import android.view.SurfaceView;
 import android.view.WindowManager;
 
+import com.bosphere.filelogger.FL;
 import com.google.android.gms.common.images.Size;
 import com.google.android.gms.vision.Detector;
 import com.google.android.gms.vision.Frame;
@@ -55,6 +55,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 // Note: This requires Google Play Services 8.1 or higher, due to using indirect byte buffers for
 // storing images.
@@ -152,7 +153,14 @@ public class CameraSource {
 
     private String mISO = null;
     private String mFocusMode = null;
+    private String mWhiteBalance = null;
+    private String mAntiBanding = null;
+    private String mSceneMode = null;
+    private boolean mAutoFocus = false;
+    private boolean mAutoCancel = false;
+    private boolean mAFBinary = false;
     private String mFlashMode = null;
+    private long AUTO_FOCUS_INTERVAL_MS = 500l;
 
     // These instances need to be held onto to avoid GC of their underlying resources.  Even though
     // these aren't used outside of the method that creates them, they still must have hard
@@ -180,6 +188,9 @@ public class CameraSource {
     private boolean mMacroModeEnabled = false;
     private AutoFocusManager mAutoFocusManager;
     private static final int AREA_PER_1000 = 200;
+
+    private final AtomicBoolean focusStart;
+
 
     //==============================================================================================
     // Builder
@@ -222,11 +233,11 @@ public class CameraSource {
 
         public Builder setFocusMode(@FocusMode String mode) {
             mCameraSource.mFocusMode = mode;
-
-            // Customize
-            if (mode.equals(Camera.Parameters.FOCUS_MODE_MACRO)) {
-                mCameraSource.mMacroModeEnabled = true;
-            }
+//
+//            // Customize
+//            if (mode.equals(Camera.Parameters.FOCUS_MODE_MACRO)) {
+//                mCameraSource.mMacroModeEnabled = true;
+//            }
             return this;
         }
 
@@ -239,6 +250,8 @@ public class CameraSource {
             mCameraSource.mISO = iso;
             return this;
         }
+
+
 
         /**
          * Sets the desired width and height of the camera frames in pixels.  If the exact desired
@@ -278,6 +291,41 @@ public class CameraSource {
             mCameraSource.mFrameProcessor = mCameraSource.new FrameProcessingRunnable(mDetector);
             return mCameraSource;
         }
+
+        public Builder setAutoFocusManager(boolean mAutoFocus) {
+            mCameraSource.mAutoFocus = mAutoFocus;
+            return this;
+        }
+
+        public Builder setWhiteBalance(String whiteBalance) {
+            mCameraSource.mWhiteBalance = whiteBalance;
+            return this;
+        }
+
+        public Builder setAutoFocusInterval(long interval) {
+            mCameraSource.AUTO_FOCUS_INTERVAL_MS = interval;
+            return this;
+        }
+
+        public Builder setAutoCancel(boolean useCancel) {
+            mCameraSource.mAutoCancel = useCancel;
+            return this;
+        }
+
+        public Builder setAntiBanding(String antiBanding) {
+            mCameraSource.mAntiBanding = antiBanding;
+            return this;
+        }
+
+        public Builder setAFBinary(boolean binary) {
+            mCameraSource.mAFBinary = binary;
+            return this;
+        }
+
+        public Builder setSceneMode(String mode) {
+            mCameraSource.mSceneMode = mode;
+            return this;
+        }
     }
 
     //==============================================================================================
@@ -309,25 +357,25 @@ public class CameraSource {
     }
 
     /**
-     * Callback interface used to notify on completion of camera auto focus.
+     * Callback interface used to notify on completion of camera auto focusMove.
      */
     public interface AutoFocusCallback {
         /**
-         * Called when the camera auto focus completes.  If the camera
-         * does not support auto-focus and autoFocus is called,
+         * Called when the camera auto focusMove completes.  If the camera
+         * does not support auto-focusMove and autoFocus is called,
          * onAutoFocus will be called immediately with a fake value of
          * <code>success</code> set to <code>true</code>.
          * <p/>
-         * The auto-focus routine does not lock auto-exposure and auto-white
+         * The auto-focusMove routine does not lock auto-exposure and auto-white
          * balance after it completes.
          *
-         * @param success true if focus was successful, false if otherwise
+         * @param success true if focusMove was successful, false if otherwise
          */
         void onAutoFocus(boolean success);
     }
 
     /**
-     * Callback interface used to notify on auto focus start and stop.
+     * Callback interface used to notify on auto focusMove start and stop.
      * <p/>
      * <p>This is only supported in continuous autofocus modes -- {@link
      * Camera.Parameters#FOCUS_MODE_CONTINUOUS_VIDEO} and {@link
@@ -336,9 +384,9 @@ public class CameraSource {
      */
     public interface AutoFocusMoveCallback {
         /**
-         * Called when the camera auto focus starts or stops.
+         * Called when the camera auto focusMove starts or stops.
          *
-         * @param start true if focus starts to move, false if focus stops to move
+         * @param start true if focusMove starts to move, false if focusMove stops to move
          */
         void onAutoFocusMoving(boolean start);
     }
@@ -413,8 +461,8 @@ public class CameraSource {
             mProcessingThread.start();
 
             // customize: Macro Mode + Autofocus
-            if (mMacroModeEnabled) {
-                mAutoFocusManager = new AutoFocusManager(mCamera);
+            if (mAutoFocus) {
+                mAutoFocusManager = new AutoFocusManager(mCamera, AUTO_FOCUS_INTERVAL_MS, mAutoCancel, mAFBinary);
             }
         }
         return this;
@@ -439,7 +487,7 @@ public class CameraSource {
                     // quickly after stop).
                     mProcessingThread.join();
                 } catch (InterruptedException e) {
-                    Log.d(TAG, "Frame processing thread interrupted on release.");
+                    FL.d(TAG, "Frame processing thread interrupted on release.");
                 }
                 mProcessingThread = null;
             }
@@ -464,11 +512,11 @@ public class CameraSource {
                         mCamera.setPreviewDisplay(null);
                     }
                 } catch (Exception e) {
-                    Log.e(TAG, "Failed to clear camera preview: " + e);
+                    FL.e(TAG, "Failed to clear camera preview: " + e);
                 }
 
                 // Customize
-                if (mMacroModeEnabled && mAutoFocusManager != null) {
+                if (mAutoFocus && mAutoFocusManager != null) {
                     mAutoFocusManager.stop();
                     mAutoFocusManager = null;
                 }
@@ -516,7 +564,7 @@ public class CameraSource {
             int maxZoom;
             Camera.Parameters parameters = mCamera.getParameters();
             if (!parameters.isZoomSupported()) {
-                Log.w(TAG, "Zoom is not supported on this device");
+                FL.w(TAG, "Zoom is not supported on this device");
                 return currentZoom;
             }
             maxZoom = parameters.getMaxZoom();
@@ -562,10 +610,10 @@ public class CameraSource {
     }
 
     /**
-     * Gets the current focus mode setting.
+     * Gets the current focusMove mode setting.
      *
-     * @return current focus mode. This value is null if the camera is not yet created. Applications should call {@link
-     * #autoFocus(AutoFocusCallback)} to start the focus if focus
+     * @return current focusMove mode. This value is null if the camera is not yet created. Applications should call {@link
+     * #autoFocus(AutoFocusCallback)} to start the focusMove if focusMove
      * mode is FOCUS_MODE_AUTO or FOCUS_MODE_MACRO.
      * @see Camera.Parameters#FOCUS_MODE_AUTO
      * @see Camera.Parameters#FOCUS_MODE_INFINITY
@@ -582,10 +630,10 @@ public class CameraSource {
     }
 
     /**
-     * Sets the focus mode.
+     * Sets the focusMove mode.
      *
-     * @param mode the focus mode
-     * @return {@code true} if the focus mode is set, {@code false} otherwise
+     * @param mode the focusMove mode
+     * @return {@code true} if the focusMove mode is set, {@code false} otherwise
      * @see #getFocusMode()
      */
     public boolean setFocusMode(@FocusMode String mode) {
@@ -645,19 +693,19 @@ public class CameraSource {
     }
 
     /**
-     * Starts camera auto-focus and registers a callback function to run when
+     * Starts camera auto-focusMove and registers a callback function to run when
      * the camera is focused.  This method is only valid when preview is active
      * (between {@link #start()} or {@link #start(SurfaceHolder)} and before {@link #stop()} or {@link #release()}).
      * <p/>
      * <p>Callers should check
      * {@link #getFocusMode()} to determine if
-     * this method should be called. If the camera does not support auto-focus,
+     * this method should be called. If the camera does not support auto-focusMove,
      * it is a no-op and {@link AutoFocusCallback#onAutoFocus(boolean)}
      * callback will be called immediately.
      * <p/>
      * <p>If the current flash mode is not
      * {@link Camera.Parameters#FLASH_MODE_OFF}, flash may be
-     * fired during auto-focus, depending on the driver and camera hardware.<p>
+     * fired during auto-focusMove, depending on the driver and camera hardware.<p>
      *
      * @param cb the callback to run
      * @see #cancelAutoFocus()
@@ -676,10 +724,10 @@ public class CameraSource {
     }
 
     /**
-     * Cancels any auto-focus function in progress.
-     * Whether or not auto-focus is currently in progress,
-     * this function will return the focus position to the default.
-     * If the camera does not support auto-focus, this is a no-op.
+     * Cancels any auto-focusMove function in progress.
+     * Whether or not auto-focusMove is currently in progress,
+     * this function will return the focusMove position to the default.
+     * If the camera does not support auto-focusMove, this is a no-op.
      *
      * @see #autoFocus(AutoFocusCallback)
      */
@@ -692,7 +740,7 @@ public class CameraSource {
     }
 
     /**
-     * Sets camera auto-focus move callback.
+     * Sets camera auto-focusMove move callback.
      *
      * @param cb the callback to run
      * @return {@code true} if the operation is supported (i.e. from Jelly Bean), {@code false} otherwise
@@ -725,6 +773,7 @@ public class CameraSource {
      * Only allow creation via the builder class.
      */
     private CameraSource() {
+        focusStart = new AtomicBoolean();
     }
 
     /**
@@ -762,7 +811,7 @@ public class CameraSource {
     }
 
     /**
-     * Wraps the camera1 auto focus callback so that the deprecated API isn't exposed.
+     * Wraps the camera1 auto focusMove callback so that the deprecated API isn't exposed.
      */
     private class CameraAutoFocusCallback implements Camera.AutoFocusCallback {
         private AutoFocusCallback mDelegate;
@@ -776,7 +825,7 @@ public class CameraSource {
     }
 
     /**
-     * Wraps the camera1 auto focus move callback so that the deprecated API isn't exposed.
+     * Wraps the camera1 auto focusMove move callback so that the deprecated API isn't exposed.
      */
     @TargetApi(Build.VERSION_CODES.JELLY_BEAN)
     private class CameraAutoFocusMoveCallback implements Camera.AutoFocusMoveCallback {
@@ -832,14 +881,36 @@ public class CameraSource {
                 previewFpsRange[Camera.Parameters.PREVIEW_FPS_MAX_INDEX]);
         parameters.setPreviewFormat(ImageFormat.NV21);
 
-        setRotation(camera, parameters, requestedCameraId);
+        if (mAntiBanding != null) {
+            if (parameters.getSupportedAntibanding().contains(mAntiBanding))
+                parameters.setAntibanding(mAntiBanding);
+            else
+                FL.i(TAG, "Camera antibanding mode: " + mAntiBanding + " is not supported on this device.");
+        }
 
+        setRotation(camera, parameters, requestedCameraId);
         if (mFocusMode != null) {
             if (parameters.getSupportedFocusModes().contains(
                     mFocusMode)) {
                 parameters.setFocusMode(mFocusMode);
             } else {
-                Log.i(TAG, "Camera focus mode: " + mFocusMode + " is not supported on this device.");
+                FL.i(TAG, "Camera focusMove mode: " + mFocusMode + " is not supported on this device.");
+            }
+        }
+
+        if (mWhiteBalance != null) {
+            if (parameters.getSupportedWhiteBalance().contains(mWhiteBalance)) {
+                parameters.setWhiteBalance(mWhiteBalance);
+            } else {
+                FL.i(TAG, "Camera whiteBalance mode: " + mWhiteBalance + " is not supported on this device.");
+            }
+        }
+
+        if (mSceneMode != null) {
+            if (parameters.getSupportedSceneModes().contains(mSceneMode)) {
+                parameters.setSceneMode(mSceneMode);
+            } else {
+                FL.i(TAG, "Camera scene mode: " + mSceneMode + " is not supported on this device.");
             }
         }
 
@@ -852,7 +923,7 @@ public class CameraSource {
                         mFlashMode)) {
                     parameters.setFlashMode(mFlashMode);
                 } else {
-                    Log.i(TAG, "Camera flash mode: " + mFlashMode + " is not supported on this device.");
+                    FL.i(TAG, "Camera flash mode: " + mFlashMode + " is not supported on this device.");
                 }
             }
         }
@@ -863,7 +934,7 @@ public class CameraSource {
         // setting mFlashMode to the one set in the params
         mFlashMode = parameters.getFlashMode();
 
-        // Customize: setting metering for camera to auto-focus based on center area
+        // Customize: setting metering for camera to auto-focusMove based on center area
         List<Camera.Area> middleArea = buildMiddleArea(AREA_PER_1000);
         parameters.setMeteringAreas(middleArea);
         parameters.setFocusAreas(middleArea);
@@ -982,12 +1053,14 @@ public class CameraSource {
         List<SizePair> validPreviewSizes = new ArrayList<>();
         for (Camera.Size previewSize : supportedPreviewSizes) {
             float previewAspectRatio = (float) previewSize.width / (float) previewSize.height;
+//            FL.i("CameraSource", "preview w = %d, h = %d, ratio = %s", previewSize.width, previewSize.height, String.valueOf(previewAspectRatio));
 
             // By looping through the picture sizes in order, we favor the higher resolutions.
             // We choose the highest resolution in order to support taking the full resolution
             // picture later.
             for (Camera.Size pictureSize : supportedPictureSizes) {
                 float pictureAspectRatio = (float) pictureSize.width / (float) pictureSize.height;
+//                FL.i("CameraSource", "picture w = %d, h = %d, ratio = %s", pictureSize.width, pictureSize.height, String.valueOf(pictureAspectRatio));
                 if (Math.abs(previewAspectRatio - pictureAspectRatio) < ASPECT_RATIO_TOLERANCE) {
                     validPreviewSizes.add(new SizePair(previewSize, pictureSize));
                     break;
@@ -999,7 +1072,7 @@ public class CameraSource {
         // of the preview sizes and hope that the camera can handle it.  Probably unlikely, but we
         // still account for it.
         if (validPreviewSizes.size() == 0) {
-            Log.w(TAG, "No preview sizes have a corresponding same-aspect-ratio picture size");
+            FL.w(TAG, "No preview sizes have a corresponding same-aspect-ratio picture size");
             for (Camera.Size previewSize : supportedPreviewSizes) {
                 // The null picture size will let us know that we shouldn't set a picture size.
                 validPreviewSizes.add(new SizePair(previewSize, null));
@@ -1068,7 +1141,7 @@ public class CameraSource {
                 degrees = 270;
                 break;
             default:
-                Log.e(TAG, "Bad rotation value: " + rotation);
+                FL.e(TAG, "Bad rotation value: " + rotation);
         }
 
         CameraInfo cameraInfo = new CameraInfo();
@@ -1153,7 +1226,9 @@ public class CameraSource {
 
         // This lock guards all of the member variables below.
         private final Object mLock = new Object();
+        private final Object mFocus = new Object();
         private boolean mActive = true;
+        private boolean mFocusStart = true;
 
         // These pending variables hold the state associated with the new frame awaiting processing.
         private long mPendingTimeMillis;
@@ -1187,6 +1262,13 @@ public class CameraSource {
             }
         }
 
+        void setFocusStart(boolean start) {
+            synchronized (mFocus) {
+                mFocusStart = start;
+                mFocus.notifyAll();
+            }
+        }
+
         /**
          * Sets the frame data received from the camera.  This adds the previous unused frame buffer
          * (if present) back to the camera, and keeps a pending reference to the frame data for
@@ -1200,7 +1282,7 @@ public class CameraSource {
                 }
 
                 if (!mBytesToByteBuffer.containsKey(data)) {
-                    Log.d(TAG,
+                    FL.d(TAG,
                         "Skipping frame.  Could not find ByteBuffer associated with the image " +
                         "data from the camera.");
                     return;
@@ -1244,15 +1326,15 @@ public class CameraSource {
                             // don't have it yet.
                             mLock.wait();
                         } catch (InterruptedException e) {
-                            Log.d(TAG, "Frame processing loop terminated.", e);
+                            FL.d(TAG, "Frame processing loop terminated.", e);
                             return;
                         }
                     }
 
                     if (!mActive) {
                         // Exit the loop once this camera source is stopped or released.  We check
-                        // this here, immediately after the wait() above, to handle the case where
                         // setActive(false) had been called, triggering the termination of this
+                        // this here, immediately after the wait() above, to handle the case where
                         // loop.
                         return;
                     }
@@ -1299,10 +1381,11 @@ public class CameraSource {
                 // the camera to add pending frame(s) while we are running detection on the current
                 // frame.
 
+
                 try {
                     mDetector.receiveFrame(outputFrame);
                 } catch (Throwable t) {
-                    Log.e(TAG, "Exception thrown from receiver.", t);
+                    FL.e(TAG, "Exception thrown from receiver.", t);
                 } finally {
                     mCamera.addCallbackBuffer(data.array());
                 }

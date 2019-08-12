@@ -19,4 +19,5 @@ android {
 
 dependencies {
     compile 'com.google.android.gms:play-services-vision:8.4.0'
+    compile 'com.github.bosphere.android-filelogger:filelogger:1.0.5'
 }

@@ -17,7 +17,9 @@ package com.bbbtech.barcodescan;
 
 import android.content.Context;
 import android.media.MediaPlayer;
+import android.os.Debug;
 
+import com.bosphere.filelogger.FL;
 import com.google.android.gms.vision.Tracker;
 import com.google.android.gms.vision.barcode.Barcode;
 
@@ -31,6 +33,8 @@ public class BarcodeTracker extends Tracker<Barcode> {
     private BarcodeRecognizer mBarcodeRecognizer;
     private Context mContext;
     private boolean mBeepEnabled;
+    private MediaPlayer mediaPlayer;
+    private MediaPlayer.OnCompletionListener listener;
 
     public BarcodeTracker(BarcodeRecognizer barcodeRecognizer) {
         mBarcodeRecognizer = barcodeRecognizer;
@@ -49,10 +53,37 @@ public class BarcodeTracker extends Tracker<Barcode> {
     public void onNewItem(int id, Barcode item) {
         if (mBarcodeRecognizer != null) {
             if (mContext != null && mBeepEnabled) {
-                MediaPlayer mediaPlayer = MediaPlayer.create(mContext, R.raw.barcode_beep);
-                mediaPlayer.start();
+                if (null == mediaPlayer) {
+                    mediaPlayer = MediaPlayer.create(mContext, R.raw.barcode_beep);
+                    mediaPlayer.setOnCompletionListener(getListener());
+                    mediaPlayer.start();
+                } else {
+                    mediaPlayer.stop();
+                    mediaPlayer.reset();
+                    mediaPlayer.start();
+                }
             }
             mBarcodeRecognizer.onRecognized(item);
         }
+    }
+
+    private MediaPlayer.OnCompletionListener getListener() {
+        if (null == listener) {
+            listener = new MediaPlayer.OnCompletionListener() {
+                @Override
+                public void onCompletion(MediaPlayer mp) {
+                    FL.i("media play onComplete >>");
+                    release();
+                }
+            };
+        }
+
+        return listener;
+    }
+
+    private void release() {
+        mediaPlayer.release();
+        mediaPlayer.setOnCompletionListener(null);
+        mediaPlayer = null;
     }
 }
